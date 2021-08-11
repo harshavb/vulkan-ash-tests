@@ -20,10 +20,10 @@ impl TriangleApplication {
         builder = builder
             .with_inner_size(LogicalSize::new(400, 400))
             .with_title("name of window");
+
         let _window = builder.build(&event_loop)?;
 
         let app = TriangleApplication { _window };
-        app.init_vulkan();
 
         Ok((app, event_loop))
     }
