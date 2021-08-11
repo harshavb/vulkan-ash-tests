@@ -1,6 +1,6 @@
 pub use crate::graphics::graphics_errors::GraphicsError;
-use ash::{Instance};
 use ash::{vk, Entry};
+use ash::{Device, Instance};
 use std::error::Error;
 use std::ffi::CString;
 use winit::window::Window;
@@ -8,11 +8,11 @@ use winit::window::Window;
 pub struct VulkanBase {
     _entry: Entry,
     instance: Instance,
-    _physical_device: vk::PhysicalDevice,
+    device: Device,
 }
 
 struct QueueFamilyIndices {
-    graphics_family_index: Option<usize>,
+    graphics_family_index: Option<u32>,
 }
 
 impl QueueFamilyIndices {
@@ -25,11 +25,20 @@ impl QueueFamilyIndices {
 impl VulkanBase {
     pub fn new(window: &Window) -> Result<VulkanBase, Box<dyn Error>> {
         let (_entry, instance) = VulkanBase::create_instance(window)?;
-        let _physical_device = VulkanBase::pick_physical_device(&instance)?;
+
+        let (physical_device, queue_family_indices) = VulkanBase::pick_physical_device(&instance)?;
+
+        let device =
+            VulkanBase::create_logical_device(&instance, &physical_device, &queue_family_indices)?;
+
+        let _graphics_queue = unsafe {
+            device.get_device_queue(queue_family_indices.graphics_family_index.unwrap(), 0)
+        };
+
         Ok(VulkanBase {
             _entry,
             instance,
-            _physical_device,
+            device,
         })
     }
 
@@ -43,8 +52,8 @@ impl VulkanBase {
             .collect::<Vec<_>>();
 
         // Loads names into CStrings
-        let application_name = CString::new("Hello Triangle")?;
-        let engine_name = CString::new("Hello Triangle Engine")?;
+        let application_name = CString::new("Hello Triangle").unwrap();
+        let engine_name = CString::new("Hello Triangle Engine").unwrap();
 
         // Creates application info
         let app_info = vk::ApplicationInfo::builder()
@@ -66,21 +75,29 @@ impl VulkanBase {
     }
 
     // Picks the first valid physical device
-    fn pick_physical_device(instance: &Instance) -> Result<vk::PhysicalDevice, Box<dyn Error>> {
+    fn pick_physical_device(
+        instance: &Instance,
+    ) -> Result<(vk::PhysicalDevice, QueueFamilyIndices), Box<dyn Error>> {
         let physical_devices = unsafe { instance.enumerate_physical_devices()? };
         for device in physical_devices {
-            if VulkanBase::is_device_suitable(instance, &device) {
-                return Ok(device);
+            if let Some(value) = VulkanBase::is_device_suitable(instance, &device) {
+                return Ok((device, value));
             }
         }
         Err(Box::new(GraphicsError::NoValidGPU))
     }
 
     // Checks whether a given physical device is valid
-    fn is_device_suitable(instance: &Instance, device: &vk::PhysicalDevice) -> bool {
+    fn is_device_suitable(
+        instance: &Instance,
+        device: &vk::PhysicalDevice,
+    ) -> Option<QueueFamilyIndices> {
         let queue_family_indices = VulkanBase::find_queue_families(instance, device);
 
-        queue_family_indices.is_complete()
+        if queue_family_indices.is_complete() {
+            return Some(queue_family_indices);
+        }
+        None
     }
 
     // Finds the queue families of a given physical device
@@ -91,8 +108,8 @@ impl VulkanBase {
         for (index, queue_family) in queue_families.iter().enumerate() {
             if queue_family.queue_flags.contains(vk::QueueFlags::GRAPHICS) {
                 return QueueFamilyIndices {
-                    graphics_family_index: Some(index),
-                }
+                    graphics_family_index: Some(index as u32),
+                };
             }
         }
 
@@ -100,12 +117,34 @@ impl VulkanBase {
             graphics_family_index: None,
         }
     }
+
+    // Creates the logical device based on necessary queue families
+    fn create_logical_device(
+        instance: &Instance,
+        physical_device: &vk::PhysicalDevice,
+        indices: &QueueFamilyIndices,
+    ) -> Result<Device, Box<dyn Error>> {
+        let queue_priorities = [1.0];
+
+        let queue_info = [vk::DeviceQueueCreateInfo::builder()
+            .queue_family_index(indices.graphics_family_index.unwrap())
+            .queue_priorities(&queue_priorities)
+            .build()];
+
+        let device_create_info = vk::DeviceCreateInfo::builder().queue_create_infos(&queue_info);
+
+        let device =
+            unsafe { instance.create_device(*physical_device, &device_create_info, None)? };
+
+        Ok(device)
+    }
 }
 
 impl Drop for VulkanBase {
     fn drop(&mut self) {
         println!("Cleaning up VulkanBase!");
         unsafe {
+            self.device.destroy_device(None);
             self.instance.destroy_instance(None);
         }
         println!("Cleaned up VulkanBase!");
