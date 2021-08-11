@@ -1,10 +1,10 @@
 use std::error::Error;
 use winit::{
     dpi::LogicalSize,
-    event_loop::{EventLoop},
-    window::{Window, WindowBuilder},
     event::{Event, WindowEvent},
     event_loop::ControlFlow,
+    event_loop::EventLoop,
+    window::{Window, WindowBuilder},
 };
 
 pub struct TriangleApplication {
@@ -17,7 +17,9 @@ impl TriangleApplication {
         let event_loop = EventLoop::new();
 
         let mut builder = WindowBuilder::new();
-        builder = builder.with_inner_size(LogicalSize::new(400, 400));
+        builder = builder
+            .with_inner_size(LogicalSize::new(400, 400))
+            .with_title("name of window");
         let _window = builder.build(&event_loop)?;
 
         let app = TriangleApplication { _window };
