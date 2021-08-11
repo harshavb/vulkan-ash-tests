@@ -5,13 +5,13 @@ use std::ffi::CString;
 use winit::window::Window;
 
 pub struct VulkanType {
-    _instance: Instance,
+    instance: Instance,
 }
 
 impl VulkanType {
     pub fn new(window: &Window) -> Result<VulkanType, Box<dyn Error>> {
-        let _instance = VulkanType::create_instance(window)?;
-        Ok(VulkanType { _instance })
+        let instance = VulkanType::create_instance(window)?;
+        Ok(VulkanType { instance })
     }
 
     // Creates an ash Instance, which is a light wrapper around a vk::Instance
@@ -50,7 +50,7 @@ impl Drop for VulkanType {
     fn drop(&mut self) {
         println!("cleaning up VulkanType!");
         unsafe {
-            self._instance.destroy_instance(None);
+            self.instance.destroy_instance(None);
         }
         println!("cleaned up VulkanType!");
     }
