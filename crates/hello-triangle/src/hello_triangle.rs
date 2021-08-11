@@ -46,7 +46,7 @@ pub fn run(app: TriangleApplication, event_loop: EventLoop<()>) {
                 event: WindowEvent::CloseRequested,
                 ..
             } => {
-                app.init_vulkan();
+                app.init_vulkan(); // TEST FUNCTION CALL - TO BE REMOVED
                 println!("Close button was pressed");
                 *control_flow = ControlFlow::Exit;
             }
