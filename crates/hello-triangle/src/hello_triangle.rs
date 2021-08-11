@@ -1,3 +1,4 @@
+use app::graphics::vulkan_initializer::VulkanType;
 use std::error::Error;
 use winit::{
     dpi::LogicalSize,
@@ -9,6 +10,7 @@ use winit::{
 
 pub struct TriangleApplication {
     _window: Window,
+    _vulkan_type: VulkanType,
 }
 
 impl TriangleApplication {
@@ -16,14 +18,20 @@ impl TriangleApplication {
     pub fn new() -> Result<(Self, EventLoop<()>), Box<dyn Error>> {
         let event_loop = EventLoop::new();
 
+        // Creates a window using a WindowBuilder
         let mut builder = WindowBuilder::new();
         builder = builder
             .with_inner_size(LogicalSize::new(400, 400))
             .with_title("name of window");
-
         let _window = builder.build(&event_loop)?;
 
-        let app = TriangleApplication { _window };
+        // Creates a VulkanType holding all the vulkan data
+        let _vulkan_type = VulkanType::new(&_window)?;
+
+        let app = TriangleApplication {
+            _window,
+            _vulkan_type,
+        };
 
         Ok((app, event_loop))
     }
