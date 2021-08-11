@@ -5,10 +5,7 @@ use hello_triangle::TriangleApplication;
 fn main() {
     let (app, io) = match TriangleApplication::new() {
         Ok((app, io)) => (app, io),
-        Err(error) => {
-            println!("{}", error);
-            panic!("got an error");
-        }
+        Err(error) => panic!("{}", error),
     };
     hello_triangle::run(app, io);
 }

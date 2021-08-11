@@ -50,10 +50,10 @@ impl VulkanBase {
 
 impl Drop for VulkanBase {
     fn drop(&mut self) {
-        println!("cleaning up VulkanType!");
+        println!("cleaning up VulkanBase!");
         unsafe {
             self.instance.destroy_instance(None);
         }
-        println!("cleaned up VulkanType!");
+        println!("cleaned up VulkanBase!");
     }
 }
