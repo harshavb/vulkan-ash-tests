@@ -4,18 +4,19 @@ use std::error::Error;
 use std::ffi::CString;
 use winit::window::Window;
 
-pub struct VulkanType {
+pub struct VulkanBase {
+    _entry: Entry,
     instance: Instance,
 }
 
-impl VulkanType {
-    pub fn new(window: &Window) -> Result<VulkanType, Box<dyn Error>> {
-        let instance = VulkanType::create_instance(window)?;
-        Ok(VulkanType { instance })
+impl VulkanBase {
+    pub fn new(window: &Window) -> Result<VulkanBase, Box<dyn Error>> {
+        let (_entry, instance) = VulkanBase::create_instance(window)?;
+        Ok(VulkanBase { _entry, instance })
     }
 
     // Creates an ash Instance, which is a light wrapper around a vk::Instance
-    fn create_instance(window: &Window) -> Result<Instance, Box<dyn Error>> {
+    fn create_instance(window: &Window) -> Result<(Entry, Instance), Box<dyn Error>> {
         // Specifies extensions
         let surface_extensions = ash_window::enumerate_required_extensions(window).unwrap();
         let extension_names_raw = surface_extensions
@@ -42,11 +43,12 @@ impl VulkanType {
 
         // Creats weird wrapper type for accessing cpp vulkan dynamic library, and creates an ash instance inside
         let entry = unsafe { Entry::new()? };
-        return Ok(unsafe { entry.create_instance(&create_info, None)? });
+        let instance = unsafe { entry.create_instance(&create_info, None)? };
+        return Ok((entry, instance));
     }
 }
 
-impl Drop for VulkanType {
+impl Drop for VulkanBase {
     fn drop(&mut self) {
         println!("cleaning up VulkanType!");
         unsafe {
