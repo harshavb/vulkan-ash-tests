@@ -1,4 +1,4 @@
-use app::graphics::vulkan_initializer::VulkanBase;
+use app::graphics::vulkan_base::VulkanBase;
 use std::error::Error;
 use winit::{
     dpi::LogicalSize,
