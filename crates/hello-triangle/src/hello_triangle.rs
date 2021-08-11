@@ -41,7 +41,8 @@ impl TriangleApplication {
 
 impl Drop for TriangleApplication {
     fn drop(&mut self) {
-        println!("graceful cleanup");
+        println!("cleaning up TriangleApplication!");
+        println!("cleaned up TriangleApplication!");
     }
 }
 

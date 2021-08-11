@@ -48,8 +48,10 @@ impl VulkanType {
 
 impl Drop for VulkanType {
     fn drop(&mut self) {
+        println!("cleaning up VulkanType!");
         unsafe {
             self._instance.destroy_instance(None);
         }
+        println!("cleaned up VulkanType!");
     }
 }
