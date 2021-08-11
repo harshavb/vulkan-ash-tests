@@ -12,6 +12,7 @@ pub struct VulkanBase {
 impl VulkanBase {
     pub fn new(window: &Window) -> Result<VulkanBase, Box<dyn Error>> {
         let (_entry, instance) = VulkanBase::create_instance(window)?;
+        VulkanBase::pick_physical_device();
         Ok(VulkanBase { _entry, instance })
     }
 
@@ -46,14 +47,18 @@ impl VulkanBase {
         let instance = unsafe { entry.create_instance(&create_info, None)? };
         return Ok((entry, instance));
     }
+
+    fn pick_physical_device() {
+        
+    }
 }
 
 impl Drop for VulkanBase {
     fn drop(&mut self) {
-        println!("cleaning up VulkanBase!");
+        println!("Cleaning up VulkanBase!");
         unsafe {
             self.instance.destroy_instance(None);
         }
-        println!("cleaned up VulkanBase!");
+        println!("Cleaned up VulkanBase!");
     }
 }
