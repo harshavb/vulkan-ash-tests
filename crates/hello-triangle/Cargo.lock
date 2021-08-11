@@ -392,6 +392,7 @@ dependencies = [
  "ash-window",
  "cgmath",
  "raw-window-handle",
+ "thiserror",
  "winit",
 ]
 
