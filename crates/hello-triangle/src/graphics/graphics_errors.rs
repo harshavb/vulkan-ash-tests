@@ -4,4 +4,7 @@ use thiserror::Error;
 pub enum GraphicsError {
     #[error("No valid GPU")]
     NoValidGPU,
+
+    #[error("Invalid GPU")]
+    InvalidGPU,
 }
