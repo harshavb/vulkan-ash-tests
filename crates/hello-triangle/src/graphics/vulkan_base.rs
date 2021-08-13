@@ -3,8 +3,13 @@ use ash::{
     extensions::khr::{Surface, Swapchain},
     vk, Device, Entry, Instance,
 };
-use std::ffi::{CStr, CString};
+use std::{
+    ffi::{CStr, CString},
+    vec::Vec,
+};
 use winit::window::Window;
+
+const BAD_ERROR: &str = "Something went incredibly wrong!";
 
 pub struct VulkanBase {
     _entry: Entry,
@@ -12,6 +17,13 @@ pub struct VulkanBase {
     surface_khr: vk::SurfaceKHR,
     surface: Surface,
     device: Device,
+    swapchain_khr: vk::SwapchainKHR,
+    swapchain: Swapchain,
+}
+
+pub struct WindowDimensions {
+    pub width: u32,
+    pub height: u32,
 }
 
 // Assumes graphics and presentation queue families are the same
@@ -19,23 +31,31 @@ struct QueueFamilyIndices {
     queue_family_index: u32,
 }
 
+struct SwapChainSupportDetails {
+    capabilities: vk::SurfaceCapabilitiesKHR,
+    formats: Vec<vk::SurfaceFormatKHR>,
+    presentation_modes: Vec<vk::PresentModeKHR>,
+}
+
 impl VulkanBase {
-    pub fn new(window: &Window) -> VulkanBase {
+    pub fn new(window: &Window, window_dimensions: WindowDimensions) -> VulkanBase {
         // Creates Entry and Instance
-        let (_entry, instance) = VulkanBase::create_instance(window);
+        let (_entry, instance) = VulkanBase::create_instance(&window);
 
         // Creates vk::SurfaceKHR and Surface
         let (surface_khr, surface) = VulkanBase::create_surface(&_entry, &instance, &window);
 
+        // Stores necessary device extensions
         let device_extension_names_raw = [Swapchain::name().as_ptr()];
 
         // Creates PhysicalDevice and stores queue family indices
-        let (physical_device, queue_family_indices) = VulkanBase::pick_physical_device(
-            &instance,
-            &device_extension_names_raw,
-            &surface_khr,
-            &surface,
-        );
+        let (physical_device, queue_family_indices, swapchain_support_details) =
+            VulkanBase::pick_physical_device(
+                &instance,
+                &device_extension_names_raw,
+                &surface_khr,
+                &surface,
+            );
 
         // Creates Device
         let device = VulkanBase::create_logical_device(
@@ -43,6 +63,14 @@ impl VulkanBase {
             &physical_device,
             &device_extension_names_raw,
             &queue_family_indices,
+        );
+
+        let (swapchain_khr, swapchain) = VulkanBase::create_swapchain(
+            &instance,
+            &device,
+            &window_dimensions,
+            &surface_khr,
+            &swapchain_support_details,
         );
 
         // Creates a queue handle for the queue family (assumes both the graphics and presentation queue families are the same)
@@ -54,6 +82,8 @@ impl VulkanBase {
             surface_khr,
             surface,
             device,
+            swapchain_khr,
+            swapchain,
         }
     }
 
@@ -85,14 +115,10 @@ impl VulkanBase {
             .enabled_extension_names(&extension_names_raw);
 
         // Creats weird wrapper type for accessing cpp vulkan dynamic library
-        let entry = unsafe { Entry::new().expect("Something went incredibly wrong!") };
+        let entry = unsafe { Entry::new().expect(BAD_ERROR) };
 
         // Creates ash instance
-        let instance = unsafe {
-            entry
-                .create_instance(&create_info, None)
-                .expect("Something went incredibly wrong!")
-        };
+        let instance = unsafe { entry.create_instance(&create_info, None).expect(BAD_ERROR) };
 
         (entry, instance)
     }
@@ -117,17 +143,17 @@ impl VulkanBase {
         extensions: &[*const i8],
         surface_khr: &vk::SurfaceKHR,
         surface: &Surface,
-    ) -> (vk::PhysicalDevice, QueueFamilyIndices) {
-        let physical_devices = unsafe {
-            instance
-                .enumerate_physical_devices()
-                .expect("Something went incredibly wrong!")
-        };
+    ) -> (
+        vk::PhysicalDevice,
+        QueueFamilyIndices,
+        SwapChainSupportDetails,
+    ) {
+        let physical_devices = unsafe { instance.enumerate_physical_devices().expect(BAD_ERROR) };
         for device in physical_devices {
-            if let Some(value) =
+            if let Some((queue_family_indices, swapchain_support_details)) =
                 VulkanBase::is_device_suitable(instance, &device, extensions, surface_khr, surface)
             {
-                return (device, value);
+                return (device, queue_family_indices, swapchain_support_details);
             }
         }
         panic!("No valid GPU!");
@@ -140,15 +166,24 @@ impl VulkanBase {
         required_extensions: &[*const i8],
         surface_khr: &vk::SurfaceKHR,
         surface: &Surface,
-    ) -> Option<QueueFamilyIndices> {
+    ) -> Option<(QueueFamilyIndices, SwapChainSupportDetails)> {
         if !VulkanBase::check_device_extension_support(instance, device, required_extensions) {
             return None;
         }
 
-        let queue_family_indices =
-            VulkanBase::find_queue_families(instance, device, surface_khr, surface);
+        let swapchain_support_details =
+            VulkanBase::query_swapchain_support_details(device, surface_khr, surface);
 
-        queue_family_indices
+        if swapchain_support_details.formats.is_empty()
+            | swapchain_support_details.presentation_modes.is_empty()
+        {
+            return None;
+        }
+
+        let queue_family_indices =
+            VulkanBase::find_queue_families(instance, device, surface_khr, surface)?;
+
+        Some((queue_family_indices, swapchain_support_details))
     }
 
     // Checcks if a given physical device supports given device extensions
@@ -160,9 +195,10 @@ impl VulkanBase {
         let device_extensions = unsafe {
             instance
                 .enumerate_device_extension_properties(*device)
-                .expect("Something went incredibly wrong!")
+                .expect(BAD_ERROR)
         };
 
+        // Unsure if this is faster than using a hashset - device_extensions has length 122 on my system
         required_extensions.iter().all(|required_extension| {
             let required_extension_name = unsafe { CStr::from_ptr(*required_extension) };
 
@@ -204,6 +240,37 @@ impl VulkanBase {
         None
     }
 
+    // Gets a given physical device's surface capabilities, formats, and presentation modes
+    fn query_swapchain_support_details(
+        device: &vk::PhysicalDevice,
+        surface_khr: &vk::SurfaceKHR,
+        surface: &Surface,
+    ) -> SwapChainSupportDetails {
+        let capabilities = unsafe {
+            surface
+                .get_physical_device_surface_capabilities(*device, *surface_khr)
+                .expect(BAD_ERROR)
+        };
+
+        let formats = unsafe {
+            surface
+                .get_physical_device_surface_formats(*device, *surface_khr)
+                .expect(BAD_ERROR)
+        };
+
+        let presentation_modes = unsafe {
+            surface
+                .get_physical_device_surface_present_modes(*device, *surface_khr)
+                .expect(BAD_ERROR)
+        };
+
+        SwapChainSupportDetails {
+            capabilities,
+            formats,
+            presentation_modes,
+        }
+    }
+
     // Creates the logical device based on necessary queue families
     fn create_logical_device(
         instance: &Instance,
@@ -225,10 +292,101 @@ impl VulkanBase {
         let device = unsafe {
             instance
                 .create_device(*physical_device, &device_create_info, None)
-                .expect("Something went incredibly wrong!")
+                .expect(BAD_ERROR)
         };
 
         device
+    }
+
+    // Creates the swap chain after determining swap chain settings
+    fn create_swapchain(
+        instance: &Instance,
+        device: &Device,
+        window: &WindowDimensions,
+        surface: &vk::SurfaceKHR,
+        swapchain_support_details: &SwapChainSupportDetails,
+    ) -> (vk::SwapchainKHR, Swapchain) {
+        let format = VulkanBase::choose_swap_surface_format(&swapchain_support_details.formats);
+
+        let presentation_mode = VulkanBase::choose_swap_surface_presentation_mode(
+            &swapchain_support_details.presentation_modes,
+        );
+
+        let extent =
+            VulkanBase::choose_swap_extant(window, &swapchain_support_details.capabilities);
+
+        let mut image_count = swapchain_support_details.capabilities.min_image_count;
+
+        if swapchain_support_details.capabilities.max_image_count
+            != swapchain_support_details.capabilities.min_image_count
+        {
+            image_count += 1;
+        }
+
+        let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
+            .surface(*surface)
+            .min_image_count(image_count)
+            .image_format(format.format)
+            .image_color_space(format.color_space)
+            .image_extent(extent)
+            .image_array_layers(1)
+            .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+            .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .pre_transform(swapchain_support_details.capabilities.current_transform)
+            .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
+            .present_mode(presentation_mode)
+            .clipped(true)
+            .old_swapchain(vk::SwapchainKHR::null());
+
+        let swapchain = Swapchain::new(instance, device);
+        let swapchain_khr = unsafe {
+            swapchain
+                .create_swapchain(&swapchain_create_info, None)
+                .expect(BAD_ERROR)
+        };
+
+        (swapchain_khr, swapchain)
+    }
+
+    // Determines surface format
+    fn choose_swap_surface_format(formats: &Vec<vk::SurfaceFormatKHR>) -> vk::SurfaceFormatKHR {
+        for format in formats {
+            if format.format == vk::Format::B8G8R8A8_SRGB
+                && format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR
+            {
+                return *format;
+            }
+        }
+
+        *formats.get(0).expect("No available surface formats!")
+    }
+
+    // Chooses presentation mode - immediate is preferred for least latency (as opposed to VSync aka FIFO)
+    fn choose_swap_surface_presentation_mode(
+        presentation_modes: &Vec<vk::PresentModeKHR>,
+    ) -> vk::PresentModeKHR {
+        for presentation_mode in presentation_modes {
+            if *presentation_mode == vk::PresentModeKHR::IMMEDIATE {
+                return *presentation_mode;
+            }
+        }
+
+        vk::PresentModeKHR::FIFO
+    }
+
+    // Creates an extent with the correct size
+    fn choose_swap_extant(
+        window: &WindowDimensions,
+        capabilities: &vk::SurfaceCapabilitiesKHR,
+    ) -> vk::Extent2D {
+        if capabilities.current_extent.width != std::u32::MAX {
+            return capabilities.current_extent;
+        }
+
+        vk::Extent2D {
+            width: window.width,
+            height: window.height,
+        }
     }
 }
 
@@ -236,6 +394,7 @@ impl Drop for VulkanBase {
     fn drop(&mut self) {
         println!("Cleaning up VulkanBase!");
         unsafe {
+            self.swapchain.destroy_swapchain(self.swapchain_khr, None);
             self.device.destroy_device(None);
             self.surface.destroy_surface(self.surface_khr, None);
             self.instance.destroy_instance(None);

@@ -1,4 +1,4 @@
-use app::graphics::vulkan_base::VulkanBase;
+use app::graphics::vulkan_base::{VulkanBase, WindowDimensions};
 use winit::{
     dpi::LogicalSize,
     event::{Event, WindowEvent},
@@ -17,15 +17,24 @@ impl TriangleApplication {
     pub fn new() -> (Self, EventLoop<()>) {
         let event_loop = EventLoop::new();
 
+        // Stores window dimensions
+        let width = 400;
+        let height = 400;
+
         // Creates a window using a WindowBuilder
         let mut builder = WindowBuilder::new();
         builder = builder
-            .with_inner_size(LogicalSize::new(400, 400))
-            .with_title("name of window");
-        let _window = builder.build(&event_loop).expect("Could not create a window!");
+            .with_title("name of window")
+            .with_inner_size(LogicalSize::new(width, height));
+        let _window = builder
+            .build(&event_loop)
+            .expect("Could not create a window!");
+
+        // Stores window information for use in VulkanBase
+        let window_dimensions = WindowDimensions { width, height };
 
         // Creates a VulkanType holding all the vulkan data
-        let _vulkan_type = VulkanBase::new(&_window);
+        let _vulkan_type = VulkanBase::new(&_window, window_dimensions);
 
         let app = TriangleApplication {
             _window,
