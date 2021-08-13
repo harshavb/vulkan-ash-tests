@@ -44,7 +44,7 @@ impl TriangleApplication {
         (app, event_loop)
     }
 
-    fn init_vulkan(&self) {}
+    fn example_function(&self) {}
 }
 
 impl Drop for TriangleApplication {
@@ -65,7 +65,7 @@ pub fn run(app: TriangleApplication, event_loop: EventLoop<()>) {
                 event: WindowEvent::CloseRequested,
                 ..
             } => {
-                app.init_vulkan(); // TEST FUNCTION CALL - TO BE REMOVED
+                app.example_function(); // TEST FUNCTION CALL - TO BE REMOVED
                 println!("Close button was pressed");
                 *control_flow = ControlFlow::Exit;
             }
