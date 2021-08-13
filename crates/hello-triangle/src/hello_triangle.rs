@@ -31,7 +31,7 @@ impl TriangleApplication {
             .expect("Could not create a window!");
 
         // Stores window information for use in VulkanBase
-        let window_dimensions = WindowDimensions { width, height };
+        let window_dimensions = WindowDimensions::new(width, height);
 
         // Creates a VulkanType holding all the vulkan data
         let _vulkan_type = VulkanBase::new(&_window, window_dimensions);

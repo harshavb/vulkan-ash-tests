@@ -19,11 +19,18 @@ pub struct VulkanBase {
     device: Device,
     swapchain_khr: vk::SwapchainKHR,
     swapchain: Swapchain,
+    swapchain_image_views: Vec<vk::ImageView>,
 }
 
 pub struct WindowDimensions {
-    pub width: u32,
-    pub height: u32,
+    width: u32,
+    height: u32,
+}
+
+impl WindowDimensions {
+    pub fn new(width: u32, height: u32) -> WindowDimensions {
+        WindowDimensions { width, height }
+    }
 }
 
 // Assumes graphics and presentation queue families are the same
@@ -31,10 +38,16 @@ struct QueueFamilyIndices {
     queue_family_index: u32,
 }
 
-struct SwapChainSupportDetails {
+struct SwapchainSupportDetails {
     capabilities: vk::SurfaceCapabilitiesKHR,
     formats: Vec<vk::SurfaceFormatKHR>,
     presentation_modes: Vec<vk::PresentModeKHR>,
+}
+
+struct SwapchainDetails {
+    format: vk::SurfaceFormatKHR,
+    _presentation_mode: vk::PresentModeKHR,
+    _extent: vk::Extent2D,
 }
 
 impl VulkanBase {
@@ -65,13 +78,25 @@ impl VulkanBase {
             &queue_family_indices,
         );
 
-        let (swapchain_khr, swapchain) = VulkanBase::create_swapchain(
+        // Creates vk::SwapchainKHR, Swapchain, and SwapchainDetails
+        let (swapchain_khr, swapchain, swapchain_details) = VulkanBase::create_swapchain(
             &instance,
             &device,
             &window_dimensions,
             &surface_khr,
             &swapchain_support_details,
         );
+
+        // Retreives available swapchain images
+        let swapchain_images = unsafe {
+            swapchain
+                .get_swapchain_images(swapchain_khr)
+                .expect(BAD_ERROR)
+        };
+
+        // Creates and stores an image view for each swapchain image
+        let swapchain_image_views =
+            VulkanBase::create_image_views(&device, &swapchain_images, &swapchain_details.format);
 
         // Creates a queue handle for the queue family (assumes both the graphics and presentation queue families are the same)
         let _queue = unsafe { device.get_device_queue(queue_family_indices.queue_family_index, 0) };
@@ -84,6 +109,7 @@ impl VulkanBase {
             device,
             swapchain_khr,
             swapchain,
+            swapchain_image_views
         }
     }
 
@@ -146,7 +172,7 @@ impl VulkanBase {
     ) -> (
         vk::PhysicalDevice,
         QueueFamilyIndices,
-        SwapChainSupportDetails,
+        SwapchainSupportDetails,
     ) {
         let physical_devices = unsafe { instance.enumerate_physical_devices().expect(BAD_ERROR) };
         for device in physical_devices {
@@ -166,7 +192,7 @@ impl VulkanBase {
         required_extensions: &[*const i8],
         surface_khr: &vk::SurfaceKHR,
         surface: &Surface,
-    ) -> Option<(QueueFamilyIndices, SwapChainSupportDetails)> {
+    ) -> Option<(QueueFamilyIndices, SwapchainSupportDetails)> {
         if !VulkanBase::check_device_extension_support(instance, device, required_extensions) {
             return None;
         }
@@ -245,7 +271,7 @@ impl VulkanBase {
         device: &vk::PhysicalDevice,
         surface_khr: &vk::SurfaceKHR,
         surface: &Surface,
-    ) -> SwapChainSupportDetails {
+    ) -> SwapchainSupportDetails {
         let capabilities = unsafe {
             surface
                 .get_physical_device_surface_capabilities(*device, *surface_khr)
@@ -264,7 +290,7 @@ impl VulkanBase {
                 .expect(BAD_ERROR)
         };
 
-        SwapChainSupportDetails {
+        SwapchainSupportDetails {
             capabilities,
             formats,
             presentation_modes,
@@ -304,8 +330,8 @@ impl VulkanBase {
         device: &Device,
         window: &WindowDimensions,
         surface: &vk::SurfaceKHR,
-        swapchain_support_details: &SwapChainSupportDetails,
-    ) -> (vk::SwapchainKHR, Swapchain) {
+        swapchain_support_details: &SwapchainSupportDetails,
+    ) -> (vk::SwapchainKHR, Swapchain, SwapchainDetails) {
         let format = VulkanBase::choose_swap_surface_format(&swapchain_support_details.formats);
 
         let presentation_mode = VulkanBase::choose_swap_surface_presentation_mode(
@@ -345,7 +371,13 @@ impl VulkanBase {
                 .expect(BAD_ERROR)
         };
 
-        (swapchain_khr, swapchain)
+        let swapchain_details = SwapchainDetails {
+            format,
+            _presentation_mode: presentation_mode,
+            _extent: extent,
+        };
+
+        (swapchain_khr, swapchain, swapchain_details)
     }
 
     // Determines surface format
@@ -388,12 +420,50 @@ impl VulkanBase {
             height: window.height,
         }
     }
+
+    // Creates an image view for each image in the swapchain
+    fn create_image_views(
+        device: &Device,
+        images: &Vec<vk::Image>,
+        format: &vk::SurfaceFormatKHR,
+    ) -> Vec<vk::ImageView> {
+        images
+            .iter()
+            .map(|image| {
+                let image_view_create_info = vk::ImageViewCreateInfo::builder()
+                    .image(*image)
+                    .view_type(vk::ImageViewType::TYPE_2D)
+                    .format(format.format)
+                    .components(vk::ComponentMapping {
+                        r: vk::ComponentSwizzle::IDENTITY,
+                        g: vk::ComponentSwizzle::IDENTITY,
+                        b: vk::ComponentSwizzle::IDENTITY,
+                        a: vk::ComponentSwizzle::IDENTITY,
+                    })
+                    .subresource_range(vk::ImageSubresourceRange {
+                        aspect_mask: vk::ImageAspectFlags::COLOR,
+                        base_mip_level: 0,
+                        level_count: 1,
+                        base_array_layer: 0,
+                        layer_count: 1,
+                    });
+                unsafe {
+                    device
+                        .create_image_view(&image_view_create_info, None)
+                        .expect(BAD_ERROR)
+                }
+            })
+            .collect()
+    }
 }
 
 impl Drop for VulkanBase {
     fn drop(&mut self) {
         println!("Cleaning up VulkanBase!");
         unsafe {
+            for image_view in self.swapchain_image_views.iter() {
+                self.device.destroy_image_view(*image_view, None);
+            }
             self.swapchain.destroy_swapchain(self.swapchain_khr, None);
             self.device.destroy_device(None);
             self.surface.destroy_surface(self.surface_khr, None);
