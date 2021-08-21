@@ -455,6 +455,11 @@ impl VulkanBase {
             })
             .collect()
     }
+
+    // Creates a graphics pipeline
+    fn create_graphics_pipeline() {
+
+    }
 }
 
 impl Drop for VulkanBase {
