@@ -109,7 +109,7 @@ impl VulkanBase {
             device,
             swapchain_khr,
             swapchain,
-            swapchain_image_views
+            swapchain_image_views,
         }
     }
 
