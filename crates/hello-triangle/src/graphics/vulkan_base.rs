@@ -339,7 +339,7 @@ impl VulkanBase {
         );
 
         let extent =
-            VulkanBase::choose_swap_extant(window, &swapchain_support_details.capabilities);
+            VulkanBase::choose_swap_extent(window, &swapchain_support_details.capabilities);
 
         let mut image_count = swapchain_support_details.capabilities.min_image_count;
 
@@ -407,7 +407,7 @@ impl VulkanBase {
     }
 
     // Creates an extent with the correct size
-    fn choose_swap_extant(
+    fn choose_swap_extent(
         window: &WindowDimensions,
         capabilities: &vk::SurfaceCapabilitiesKHR,
     ) -> vk::Extent2D {
