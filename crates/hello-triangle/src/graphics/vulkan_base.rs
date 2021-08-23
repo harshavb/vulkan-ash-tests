@@ -1,11 +1,12 @@
 pub use crate::graphics::graphics_errors::GraphicsError;
 use ash::{
     extensions::khr::{Surface, Swapchain},
-    vk, Device, Entry, Instance,
+    util, vk, Device, Entry, Instance,
 };
 use std::{
     ffi::{CStr, CString},
     vec::Vec,
+    io::Cursor,
 };
 use winit::window::Window;
 
@@ -457,8 +458,19 @@ impl VulkanBase {
     }
 
     // Creates a graphics pipeline
-    fn create_graphics_pipeline() {
+    fn _create_graphics_pipeline() {
+        let (_vertex_code, _fragment_code) = VulkanBase::_read_shaders();
+    }
 
+    // Reads shader code from shader files
+    fn _read_shaders() -> (Vec<u32>, Vec<u32>) {
+        let mut vertex_shader_file = Cursor::new(&include_bytes!("shaders\\vertex.spv"));
+        let mut fragment_shader_file = Cursor::new(&include_bytes!("shaders\\fragment.spv"));
+
+        let vertex_code = util::read_spv(&mut vertex_shader_file).expect("Failed to read vertex shader file");
+        let fragment_code = util::read_spv(&mut fragment_shader_file).expect("Failed to read fragment shader files");
+
+        (vertex_code, fragment_code)
     }
 }
 
