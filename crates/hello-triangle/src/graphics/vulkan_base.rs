@@ -347,13 +347,14 @@ impl VulkanBase {
         let extent =
             VulkanBase::choose_swap_extent(window, &swapchain_support_details.capabilities);
 
-        let mut image_count = swapchain_support_details.capabilities.min_image_count;
+        let image_count = swapchain_support_details.capabilities.min_image_count;
 
-        if swapchain_support_details.capabilities.max_image_count
+        // Implements double buffering
+        /*if swapchain_support_details.capabilities.max_image_count
             != swapchain_support_details.capabilities.min_image_count
         {
             image_count += 1;
-        }
+        }*/
 
         let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
             .surface(*surface)
@@ -469,6 +470,15 @@ impl VulkanBase {
         let vertex_shader_module = VulkanBase::create_shader_module(device, &vertex_code);
         let fragment_shader_module = VulkanBase::create_shader_module(device, &fragment_code);
 
+        let _vertex_shader_stage_create_info = VulkanBase::create_shader_stage_create_info(
+            &vertex_shader_module,
+            vk::ShaderStageFlags::VERTEX,
+        );
+        let _fragment_shader_stage_create_info = VulkanBase::create_shader_stage_create_info(
+            &fragment_shader_module,
+            vk::ShaderStageFlags::FRAGMENT,
+        );
+
         vec![vertex_shader_module, fragment_shader_module]
     }
 
@@ -496,6 +506,19 @@ impl VulkanBase {
                 .create_shader_module(&shader_module_create_info, None)
                 .expect(BAD_ERROR)
         }
+    }
+
+    fn create_shader_stage_create_info(
+        shader_module: &vk::ShaderModule,
+        stage: vk::ShaderStageFlags,
+    ) -> vk::PipelineShaderStageCreateInfo {
+        let shader_entry_name = CString::new("main").unwrap();
+
+        vk::PipelineShaderStageCreateInfo::builder()
+            .module(*shader_module)
+            .name(shader_entry_name.as_c_str())
+            .stage(stage)
+            .build()
     }
 }
 
