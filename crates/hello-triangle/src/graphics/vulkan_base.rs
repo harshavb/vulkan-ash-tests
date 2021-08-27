@@ -464,11 +464,12 @@ impl VulkanBase {
 
     // Reads shader code from shader files
     fn _read_shaders() -> (Vec<u32>, Vec<u32>) {
+        // Reads precompiled shaders
         let mut vertex_shader_file = Cursor::new(&include_bytes!("shaders\\vertex.spv"));
         let mut fragment_shader_file = Cursor::new(&include_bytes!("shaders\\fragment.spv"));
 
         let vertex_code = util::read_spv(&mut vertex_shader_file).expect("Failed to read vertex shader file");
-        let fragment_code = util::read_spv(&mut fragment_shader_file).expect("Failed to read fragment shader files");
+        let fragment_code = util::read_spv(&mut fragment_shader_file).expect("Failed to read fragment shader file");
 
         (vertex_code, fragment_code)
     }
