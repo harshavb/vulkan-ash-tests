@@ -5,8 +5,8 @@ use ash::{
 };
 use std::{
     ffi::{CStr, CString},
-    vec::Vec,
     io::Cursor,
+    vec::Vec,
 };
 use winit::window::Window;
 
@@ -21,6 +21,7 @@ pub struct VulkanBase {
     swapchain_khr: vk::SwapchainKHR,
     swapchain: Swapchain,
     swapchain_image_views: Vec<vk::ImageView>,
+    shader_modules: Vec<vk::ShaderModule>,
 }
 
 pub struct WindowDimensions {
@@ -102,6 +103,9 @@ impl VulkanBase {
         // Creates a queue handle for the queue family (assumes both the graphics and presentation queue families are the same)
         let _queue = unsafe { device.get_device_queue(queue_family_indices.queue_family_index, 0) };
 
+        // Sets up graphics pipeline and returns shader modules
+        let shader_modules = VulkanBase::create_graphics_pipeline(&device);
+
         VulkanBase {
             _entry,
             instance,
@@ -111,6 +115,7 @@ impl VulkanBase {
             swapchain_khr,
             swapchain,
             swapchain_image_views,
+            shader_modules,
         }
     }
 
@@ -458,21 +463,39 @@ impl VulkanBase {
     }
 
     // Creates a graphics pipeline
-    fn _create_graphics_pipeline() {
-        let (_vertex_code, _fragment_code) = VulkanBase::_read_shaders();
+    fn create_graphics_pipeline(device: &Device) -> Vec<vk::ShaderModule> {
+        let (vertex_code, fragment_code) = VulkanBase::read_shaders();
+
+        let vertex_shader_module = VulkanBase::create_shader_module(device, &vertex_code);
+        let fragment_shader_module = VulkanBase::create_shader_module(device, &fragment_code);
+
+        vec![vertex_shader_module, fragment_shader_module]
     }
 
-    // Reads shader code from shader files
-    fn _read_shaders() -> (Vec<u32>, Vec<u32>) {
+    // Reads shader code from shader files (should be changed to take a shader file path as an argument in production code!)
+    fn read_shaders() -> (Vec<u32>, Vec<u32>) {
         // Reads precompiled shaders
         // Macro include_bytes! must know path names at compile time! If shaders are unknown, or for automation, a different solution is required.
         let mut vertex_shader_file = Cursor::new(&include_bytes!("shaders\\vertex.spv"));
         let mut fragment_shader_file = Cursor::new(&include_bytes!("shaders\\fragment.spv"));
 
-        let vertex_code = util::read_spv(&mut vertex_shader_file).expect("Failed to read vertex shader file");
-        let fragment_code = util::read_spv(&mut fragment_shader_file).expect("Failed to read fragment shader file");
+        let vertex_code =
+            util::read_spv(&mut vertex_shader_file).expect("Failed to read vertex shader file");
+        let fragment_code =
+            util::read_spv(&mut fragment_shader_file).expect("Failed to read fragment shader file");
 
         (vertex_code, fragment_code)
+    }
+
+    // Creates a shader module from shader code stored in a u32 vector
+    fn create_shader_module(device: &Device, code: &Vec<u32>) -> vk::ShaderModule {
+        let shader_module_create_info = vk::ShaderModuleCreateInfo::builder().code(code);
+
+        unsafe {
+            device
+                .create_shader_module(&shader_module_create_info, None)
+                .expect(BAD_ERROR)
+        }
     }
 }
 
@@ -480,6 +503,9 @@ impl Drop for VulkanBase {
     fn drop(&mut self) {
         println!("Cleaning up VulkanBase!");
         unsafe {
+            for shader_module in self.shader_modules.iter() {
+                self.device.destroy_shader_module(*shader_module, None);
+            }
             for image_view in self.swapchain_image_views.iter() {
                 self.device.destroy_image_view(*image_view, None);
             }
