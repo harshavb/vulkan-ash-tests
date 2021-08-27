@@ -472,7 +472,7 @@ impl VulkanBase {
         vec![vertex_shader_module, fragment_shader_module]
     }
 
-    // Reads shader code from shader files (should be changed to take a shader file path as an argument in production code!)
+    // Reads shader code from shader files (should be changed to take a shader file path as an argument in production code... I think)
     fn read_shaders() -> (Vec<u32>, Vec<u32>) {
         // Reads precompiled shaders
         // Macro include_bytes! must know path names at compile time! If shaders are unknown, or for automation, a different solution is required.
