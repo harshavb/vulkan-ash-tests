@@ -312,13 +312,13 @@ impl VulkanBase {
     ) -> Device {
         let queue_priorities = [1.0];
 
-        let queue_info = [vk::DeviceQueueCreateInfo::builder()
+        let queue_info = vk::DeviceQueueCreateInfo::builder()
             .queue_family_index(indices.queue_family_index)
-            .queue_priorities(&queue_priorities)
-            .build()];
+            .queue_priorities(&queue_priorities);
 
+        // Wraps reference to queue_info in a slice in order to preserve lifetime information - bad alternative is to build() the queue_info
         let device_create_info = vk::DeviceCreateInfo::builder()
-            .queue_create_infos(&queue_info)
+            .queue_create_infos(std::slice::from_ref(&queue_info))
             .enabled_extension_names(extensions);
 
         let device = unsafe {
@@ -508,17 +508,19 @@ impl VulkanBase {
         }
     }
 
+    // Describes the info for each shader stage, assigning the appropriate shader module
     fn create_shader_stage_create_info(
         shader_module: &vk::ShaderModule,
         stage: vk::ShaderStageFlags,
     ) -> vk::PipelineShaderStageCreateInfo {
         let shader_entry_name = CString::new("main").unwrap();
 
-        vk::PipelineShaderStageCreateInfo::builder()
-            .module(*shader_module)
-            .name(shader_entry_name.as_c_str())
-            .stage(stage)
-            .build()
+        vk::PipelineShaderStageCreateInfo {
+            module: *shader_module,
+            p_name: shader_entry_name.as_ptr(),
+            stage: stage,
+            ..Default::default()
+        }
     }
 }
 
