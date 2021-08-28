@@ -470,14 +470,17 @@ impl VulkanBase {
         let vertex_shader_module = VulkanBase::create_shader_module(device, &vertex_code);
         let fragment_shader_module = VulkanBase::create_shader_module(device, &fragment_code);
 
-        let _vertex_shader_stage_create_info = VulkanBase::create_shader_stage_create_info(
-            &vertex_shader_module,
-            vk::ShaderStageFlags::VERTEX,
-        );
-        let _fragment_shader_stage_create_info = VulkanBase::create_shader_stage_create_info(
-            &fragment_shader_module,
-            vk::ShaderStageFlags::FRAGMENT,
-        );
+        let shader_entry_name = CString::new("main").unwrap();
+
+        let _vertex_shader_stage_create_info = vk::PipelineShaderStageCreateInfo::builder()
+            .module(vertex_shader_module)
+            .name(shader_entry_name.as_c_str())
+            .stage(vk::ShaderStageFlags::VERTEX);
+
+        let _fragment_shader_stage_create_info = vk::PipelineShaderStageCreateInfo::builder()
+            .module(fragment_shader_module)
+            .name(shader_entry_name.as_c_str())
+            .stage(vk::ShaderStageFlags::FRAGMENT);
 
         vec![vertex_shader_module, fragment_shader_module]
     }
@@ -505,21 +508,6 @@ impl VulkanBase {
             device
                 .create_shader_module(&shader_module_create_info, None)
                 .expect(BAD_ERROR)
-        }
-    }
-
-    // Describes the info for each shader stage, assigning the appropriate shader module
-    fn create_shader_stage_create_info(
-        shader_module: &vk::ShaderModule,
-        stage: vk::ShaderStageFlags,
-    ) -> vk::PipelineShaderStageCreateInfo {
-        let shader_entry_name = CString::new("main").unwrap();
-
-        vk::PipelineShaderStageCreateInfo {
-            module: *shader_module,
-            p_name: shader_entry_name.as_ptr(),
-            stage: stage,
-            ..Default::default()
         }
     }
 }
