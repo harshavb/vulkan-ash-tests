@@ -104,7 +104,9 @@ impl VulkanBase {
         // Creates a queue handle for the queue family (assumes both the graphics and presentation queue families are the same)
         let _queue = unsafe { device.get_device_queue(queue_family_indices.queue_family_index, 0) };
 
-        // Sets up graphics pipeline and returns shader modules
+        let render_pass = VulkanBase::create_render_pass(&device, &swapchain_details.format);
+
+        // Creates shader modules, pipeline layout, and pipeline
         let (shader_modules, pipeline_layout) =
             VulkanBase::create_graphics_pipeline(&device, &swapchain_details.extent);
 
@@ -470,8 +472,38 @@ impl VulkanBase {
             .collect()
     }
 
+    fn create_render_pass(device: &Device, format: &vk::SurfaceFormatKHR) -> vk::RenderPass {
+        let color_attachment = [*vk::AttachmentDescription::builder()
+            .format(format.format)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::STORE)
+            .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)];
+
+        let color_attachment_reference = [*vk::AttachmentReference::builder()
+            .attachment(0)
+            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)];
+
+        let subpass = [*vk::SubpassDescription::builder()
+            .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
+            .color_attachments(&color_attachment_reference)];
+
+        let render_pass_info = vk::RenderPassCreateInfo::builder()
+            .attachments(&color_attachment)
+            .subpasses(&subpass);
+
+        unsafe {
+            device
+                .create_render_pass(&render_pass_info, None)
+                .expect(BAD_ERROR)
+        }
+    }
+
     // Creates shader modules, graphics pipeline layout, and graphics pipeline
-    fn create_graphics_pipeline(device: &Device, extent: &vk::Extent2D) -> (Vec<vk::ShaderModule>, vk::PipelineLayout) {
+    fn create_graphics_pipeline(
+        device: &Device,
+        extent: &vk::Extent2D,
+    ) -> (Vec<vk::ShaderModule>, vk::PipelineLayout) {
         let (vertex_code, fragment_code) = VulkanBase::read_shaders();
 
         // Shader modules
@@ -548,7 +580,10 @@ impl VulkanBase {
                 .expect(BAD_ERROR)
         };
 
-        (vec![vertex_shader_module, fragment_shader_module], pipeline_layout)
+        (
+            vec![vertex_shader_module, fragment_shader_module],
+            pipeline_layout,
+        )
     }
 
     // Reads shader code from shader files (should be changed to take a shader file path as an argument in production code... I think)
@@ -582,7 +617,8 @@ impl Drop for VulkanBase {
     fn drop(&mut self) {
         println!("Cleaning up VulkanBase!");
         unsafe {
-            self.device.destroy_pipeline_layout(self.pipeline_layout, None);
+            self.device
+                .destroy_pipeline_layout(self.pipeline_layout, None);
             for shader_module in self.shader_modules.iter() {
                 self.device.destroy_shader_module(*shader_module, None);
             }
