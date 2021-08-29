@@ -473,24 +473,27 @@ impl VulkanBase {
     }
 
     fn create_render_pass(device: &Device, format: &vk::SurfaceFormatKHR) -> vk::RenderPass {
-        let color_attachment = [*vk::AttachmentDescription::builder()
+        let color_attachments = [vk::AttachmentDescription::builder()
             .format(format.format)
             .samples(vk::SampleCountFlags::TYPE_1)
             .load_op(vk::AttachmentLoadOp::CLEAR)
             .store_op(vk::AttachmentStoreOp::STORE)
-            .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)];
+            .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+            .build()];
 
-        let color_attachment_reference = [*vk::AttachmentReference::builder()
+        let color_attachment_references = [vk::AttachmentReference::builder()
             .attachment(0)
-            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)];
+            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .build()];
 
-        let subpass = [*vk::SubpassDescription::builder()
+        let subpasses = [vk::SubpassDescription::builder()
             .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
-            .color_attachments(&color_attachment_reference)];
+            .color_attachments(&color_attachment_references)
+            .build()];
 
         let render_pass_info = vk::RenderPassCreateInfo::builder()
-            .attachments(&color_attachment)
-            .subpasses(&subpass);
+            .attachments(&color_attachments)
+            .subpasses(&subpasses);
 
         unsafe {
             device
@@ -531,21 +534,23 @@ impl VulkanBase {
 
         // In reality viewport and scissors should be set during render pass dynamically, rather than before,
         // in order to prevent having to recreate the pipeline everytime the window is resized
-        let viewport = vk::Viewport::builder()
+        let viewports = [vk::Viewport::builder()
             .x(0.0)
             .y(0.0)
             .width(extent.width as f32)
             .height(extent.height as f32)
             .min_depth(0.0)
-            .max_depth(1.0);
+            .max_depth(1.0)
+            .build()];
 
-        let scissors = vk::Rect2D::builder()
+        let scissors = [vk::Rect2D::builder()
             .offset(*vk::Offset2D::builder().x(0).y(0))
-            .extent(*extent);
+            .extent(*extent)
+            .build()];
 
         let viewport_info = vk::PipelineViewportStateCreateInfo::builder()
-            .viewports(&[*viewport])
-            .scissors(&[*scissors]);
+            .viewports(&viewports)
+            .scissors(&scissors);
 
         let rasterization_info = vk::PipelineRasterizationStateCreateInfo::builder()
             .polygon_mode(vk::PolygonMode::FILL)
@@ -555,7 +560,7 @@ impl VulkanBase {
         let multisample_info = vk::PipelineMultisampleStateCreateInfo::builder()
             .rasterization_samples(vk::SampleCountFlags::TYPE_1);
 
-        let alpha_blending_attachment = vk::PipelineColorBlendAttachmentState::builder()
+        let alpha_blending_attachments = [vk::PipelineColorBlendAttachmentState::builder()
             .blend_enable(false)
             .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
             .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
@@ -563,11 +568,12 @@ impl VulkanBase {
             .src_alpha_blend_factor(vk::BlendFactor::ONE)
             .dst_color_blend_factor(vk::BlendFactor::ZERO)
             .alpha_blend_op(vk::BlendOp::ADD)
-            .color_write_mask(vk::ColorComponentFlags::all());
+            .color_write_mask(vk::ColorComponentFlags::all())
+            .build()];
 
         let color_blend_info = vk::PipelineColorBlendStateCreateInfo::builder()
             .logic_op(vk::LogicOp::CLEAR)
-            .attachments(&[*alpha_blending_attachment]);
+            .attachments(&alpha_blending_attachments);
 
         let dynamic_states = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
         let dynamic_info =
