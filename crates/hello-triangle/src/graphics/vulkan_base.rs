@@ -24,6 +24,7 @@ pub struct VulkanBase {
     render_pass: vk::RenderPass,
     shader_modules: Vec<vk::ShaderModule>,
     pipeline_layout: vk::PipelineLayout,
+    pipeline: vk::Pipeline,
 }
 
 pub struct WindowDimensions {
@@ -108,8 +109,8 @@ impl VulkanBase {
         let render_pass = VulkanBase::create_render_pass(&device, &swapchain_details.format);
 
         // Creates shader modules, pipeline layout, and pipeline
-        let (shader_modules, pipeline_layout) =
-            VulkanBase::create_graphics_pipeline(&device, &swapchain_details.extent);
+        let (shader_modules, pipeline_layout, pipeline) =
+            VulkanBase::create_graphics_pipeline(&device, &render_pass, &swapchain_details.extent);
 
         VulkanBase {
             _entry,
@@ -123,6 +124,7 @@ impl VulkanBase {
             render_pass,
             shader_modules,
             pipeline_layout,
+            pipeline,
         }
     }
 
@@ -507,8 +509,9 @@ impl VulkanBase {
     // Creates shader modules, graphics pipeline layout, and graphics pipeline
     fn create_graphics_pipeline(
         device: &Device,
+        render_pass: &vk::RenderPass,
         extent: &vk::Extent2D,
-    ) -> (Vec<vk::ShaderModule>, vk::PipelineLayout) {
+    ) -> (Vec<vk::ShaderModule>, vk::PipelineLayout, vk::Pipeline) {
         let (vertex_code, fragment_code) = VulkanBase::read_shaders();
 
         // Shader modules
@@ -517,15 +520,18 @@ impl VulkanBase {
 
         let shader_entry_name = CString::new("main").unwrap();
 
-        let vertex_shader_stage_create_info = vk::PipelineShaderStageCreateInfo::builder()
-            .module(vertex_shader_module)
-            .name(shader_entry_name.as_c_str())
-            .stage(vk::ShaderStageFlags::VERTEX);
-
-        let fragment_shader_stage_create_info = vk::PipelineShaderStageCreateInfo::builder()
-            .module(fragment_shader_module)
-            .name(shader_entry_name.as_c_str())
-            .stage(vk::ShaderStageFlags::FRAGMENT);
+        let shader_stage_infos = [
+            vk::PipelineShaderStageCreateInfo::builder()
+                .module(vertex_shader_module)
+                .name(shader_entry_name.as_c_str())
+                .stage(vk::ShaderStageFlags::VERTEX)
+                .build(),
+            vk::PipelineShaderStageCreateInfo::builder()
+                .module(fragment_shader_module)
+                .name(shader_entry_name.as_c_str())
+                .stage(vk::ShaderStageFlags::FRAGMENT)
+                .build(),
+        ];
 
         let vertex_input_info = vk::PipelineVertexInputStateCreateInfo::builder()
             .vertex_binding_descriptions(&[])
@@ -588,9 +594,29 @@ impl VulkanBase {
                 .expect(BAD_ERROR)
         };
 
+        let graphics_pipeline_info = [vk::GraphicsPipelineCreateInfo::builder()
+            .stages(&shader_stage_infos)
+            .vertex_input_state(&vertex_input_info)
+            .input_assembly_state(&input_assembly_info)
+            .viewport_state(&viewport_info)
+            .rasterization_state(&rasterization_info)
+            .multisample_state(&multisample_info)
+            .color_blend_state(&color_blend_info)
+            .dynamic_state(&dynamic_info)
+            .layout(pipeline_layout)
+            .render_pass(*render_pass)
+            .build()];
+
+        let graphics_pipelines = unsafe {
+            device
+                .create_graphics_pipelines(vk::PipelineCache::null(), &graphics_pipeline_info, None)
+                .expect(BAD_ERROR)
+        };
+
         (
             vec![vertex_shader_module, fragment_shader_module],
             pipeline_layout,
+            graphics_pipelines[0],
         )
     }
 
