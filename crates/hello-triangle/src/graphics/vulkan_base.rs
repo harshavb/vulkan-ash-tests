@@ -360,14 +360,14 @@ impl VulkanBase {
         let extent =
             VulkanBase::choose_swap_extent(window, &swapchain_support_details.capabilities);
 
-        let image_count = swapchain_support_details.capabilities.min_image_count;
+        let mut image_count = swapchain_support_details.capabilities.min_image_count;
 
         // Implements double buffering
-        /*if swapchain_support_details.capabilities.max_image_count
+        if swapchain_support_details.capabilities.max_image_count
             != swapchain_support_details.capabilities.min_image_count
         {
             image_count += 1;
-        }*/
+        }
 
         let swapchain_create_info = vk::SwapchainCreateInfoKHR::builder()
             .surface(*surface)
