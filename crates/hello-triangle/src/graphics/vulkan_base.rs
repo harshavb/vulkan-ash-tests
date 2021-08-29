@@ -21,6 +21,7 @@ pub struct VulkanBase {
     swapchain_khr: vk::SwapchainKHR,
     swapchain: Swapchain,
     swapchain_image_views: Vec<vk::ImageView>,
+    render_pass: vk::RenderPass,
     shader_modules: Vec<vk::ShaderModule>,
     pipeline_layout: vk::PipelineLayout,
 }
@@ -119,6 +120,7 @@ impl VulkanBase {
             swapchain_khr,
             swapchain,
             swapchain_image_views,
+            render_pass,
             shader_modules,
             pipeline_layout,
         }
@@ -623,6 +625,7 @@ impl Drop for VulkanBase {
     fn drop(&mut self) {
         println!("Cleaning up VulkanBase!");
         unsafe {
+            self.device.destroy_render_pass(self.render_pass, None);
             self.device
                 .destroy_pipeline_layout(self.pipeline_layout, None);
             for shader_module in self.shader_modules.iter() {
