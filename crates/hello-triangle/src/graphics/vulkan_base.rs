@@ -624,8 +624,8 @@ impl VulkanBase {
     fn read_shaders() -> (Vec<u32>, Vec<u32>) {
         // Reads precompiled shaders
         // Macro include_bytes! must know path names at compile time! If shaders are unknown, or for automation, a different solution is required.
-        let mut vertex_shader_file = Cursor::new(&include_bytes!("shaders\\vertex.spv"));
-        let mut fragment_shader_file = Cursor::new(&include_bytes!("shaders\\fragment.spv"));
+        let mut vertex_shader_file = Cursor::new(&include_bytes!("shaders/vertex.spv"));
+        let mut fragment_shader_file = Cursor::new(&include_bytes!("shaders/fragment.spv"));
 
         let vertex_code =
             util::read_spv(&mut vertex_shader_file).expect("Failed to read vertex shader file");
