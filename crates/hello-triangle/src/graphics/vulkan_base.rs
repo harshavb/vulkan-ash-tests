@@ -230,7 +230,7 @@ impl VulkanBase {
         Some((queue_family_indices, swapchain_support_details))
     }
 
-    // Checcks if a given physical device supports given device extensions
+    // Checks if a given physical device supports given device extensions
     fn check_device_extension_support(
         instance: &Instance,
         device: &vk::PhysicalDevice,
