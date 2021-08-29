@@ -22,6 +22,7 @@ pub struct VulkanBase {
     swapchain: Swapchain,
     swapchain_image_views: Vec<vk::ImageView>,
     shader_modules: Vec<vk::ShaderModule>,
+    pipeline_layout: vk::PipelineLayout,
 }
 
 pub struct WindowDimensions {
@@ -49,7 +50,7 @@ struct SwapchainSupportDetails {
 struct SwapchainDetails {
     format: vk::SurfaceFormatKHR,
     _presentation_mode: vk::PresentModeKHR,
-    _extent: vk::Extent2D,
+    extent: vk::Extent2D,
 }
 
 impl VulkanBase {
@@ -104,7 +105,8 @@ impl VulkanBase {
         let _queue = unsafe { device.get_device_queue(queue_family_indices.queue_family_index, 0) };
 
         // Sets up graphics pipeline and returns shader modules
-        let shader_modules = VulkanBase::create_graphics_pipeline(&device);
+        let (shader_modules, pipeline_layout) =
+            VulkanBase::create_graphics_pipeline(&device, &swapchain_details.extent);
 
         VulkanBase {
             _entry,
@@ -116,6 +118,7 @@ impl VulkanBase {
             swapchain,
             swapchain_image_views,
             shader_modules,
+            pipeline_layout,
         }
     }
 
@@ -161,6 +164,7 @@ impl VulkanBase {
         instance: &Instance,
         window: &Window,
     ) -> (vk::SurfaceKHR, Surface) {
+        // Creates a Vulkan KHR object and then a light ash wrapper (both are required)
         let surface_khr = unsafe {
             ash_window::create_surface(entry, instance, window, None)
                 .expect("Unsupported platform!")
@@ -181,6 +185,7 @@ impl VulkanBase {
         SwapchainSupportDetails,
     ) {
         let physical_devices = unsafe { instance.enumerate_physical_devices().expect(BAD_ERROR) };
+
         for device in physical_devices {
             if let Some((queue_family_indices, swapchain_support_details)) =
                 VulkanBase::is_device_suitable(instance, &device, extensions, surface_khr, surface)
@@ -188,10 +193,11 @@ impl VulkanBase {
                 return (device, queue_family_indices, swapchain_support_details);
             }
         }
+
         panic!("No valid GPU!");
     }
 
-    // Checks whether a given physical device is valid, and returns the queue family indices of that device
+    // Checks whether a given physical device is valid, and if it is returns the queue family indices of that device
     fn is_device_suitable(
         instance: &Instance,
         device: &vk::PhysicalDevice,
@@ -316,7 +322,8 @@ impl VulkanBase {
             .queue_family_index(indices.queue_family_index)
             .queue_priorities(&queue_priorities);
 
-        // Wraps reference to queue_info in a slice in order to preserve lifetime information - bad alternative is to build() the queue_info
+        // Wraps reference to queue_info in a slice in order to preserve lifetime information
+        // Bad alternative is to build() the queue_info
         let device_create_info = vk::DeviceCreateInfo::builder()
             .queue_create_infos(std::slice::from_ref(&queue_info))
             .enabled_extension_names(extensions);
@@ -381,7 +388,7 @@ impl VulkanBase {
         let swapchain_details = SwapchainDetails {
             format,
             _presentation_mode: presentation_mode,
-            _extent: extent,
+            extent: extent,
         };
 
         (swapchain_khr, swapchain, swapchain_details)
@@ -463,26 +470,85 @@ impl VulkanBase {
             .collect()
     }
 
-    // Creates a graphics pipeline
-    fn create_graphics_pipeline(device: &Device) -> Vec<vk::ShaderModule> {
+    // Creates shader modules, graphics pipeline layout, and graphics pipeline
+    fn create_graphics_pipeline(device: &Device, extent: &vk::Extent2D) -> (Vec<vk::ShaderModule>, vk::PipelineLayout) {
         let (vertex_code, fragment_code) = VulkanBase::read_shaders();
 
+        // Shader modules
         let vertex_shader_module = VulkanBase::create_shader_module(device, &vertex_code);
         let fragment_shader_module = VulkanBase::create_shader_module(device, &fragment_code);
 
         let shader_entry_name = CString::new("main").unwrap();
 
-        let _vertex_shader_stage_create_info = vk::PipelineShaderStageCreateInfo::builder()
+        let vertex_shader_stage_create_info = vk::PipelineShaderStageCreateInfo::builder()
             .module(vertex_shader_module)
             .name(shader_entry_name.as_c_str())
             .stage(vk::ShaderStageFlags::VERTEX);
 
-        let _fragment_shader_stage_create_info = vk::PipelineShaderStageCreateInfo::builder()
+        let fragment_shader_stage_create_info = vk::PipelineShaderStageCreateInfo::builder()
             .module(fragment_shader_module)
             .name(shader_entry_name.as_c_str())
             .stage(vk::ShaderStageFlags::FRAGMENT);
 
-        vec![vertex_shader_module, fragment_shader_module]
+        let vertex_input_info = vk::PipelineVertexInputStateCreateInfo::builder()
+            .vertex_binding_descriptions(&[])
+            .vertex_attribute_descriptions(&[]);
+
+        let input_assembly_info = vk::PipelineInputAssemblyStateCreateInfo::builder()
+            .topology(vk::PrimitiveTopology::TRIANGLE_LIST);
+
+        // In reality viewport and scissors should be set during render pass dynamically, rather than before,
+        // in order to prevent having to recreate the pipeline everytime the window is resized
+        let viewport = vk::Viewport::builder()
+            .x(0.0)
+            .y(0.0)
+            .width(extent.width as f32)
+            .height(extent.height as f32)
+            .min_depth(0.0)
+            .max_depth(1.0);
+
+        let scissors = vk::Rect2D::builder()
+            .offset(*vk::Offset2D::builder().x(0).y(0))
+            .extent(*extent);
+
+        let viewport_info = vk::PipelineViewportStateCreateInfo::builder()
+            .viewports(&[*viewport])
+            .scissors(&[*scissors]);
+
+        let rasterization_info = vk::PipelineRasterizationStateCreateInfo::builder()
+            .polygon_mode(vk::PolygonMode::FILL)
+            .line_width(1.0)
+            .front_face(vk::FrontFace::COUNTER_CLOCKWISE);
+
+        let multisample_info = vk::PipelineMultisampleStateCreateInfo::builder()
+            .rasterization_samples(vk::SampleCountFlags::TYPE_1);
+
+        let alpha_blending_attachment = vk::PipelineColorBlendAttachmentState::builder()
+            .blend_enable(false)
+            .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
+            .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+            .color_blend_op(vk::BlendOp::ADD)
+            .src_alpha_blend_factor(vk::BlendFactor::ONE)
+            .dst_color_blend_factor(vk::BlendFactor::ZERO)
+            .alpha_blend_op(vk::BlendOp::ADD)
+            .color_write_mask(vk::ColorComponentFlags::all());
+
+        let color_blend_info = vk::PipelineColorBlendStateCreateInfo::builder()
+            .logic_op(vk::LogicOp::CLEAR)
+            .attachments(&[*alpha_blending_attachment]);
+
+        let dynamic_states = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
+        let dynamic_info =
+            vk::PipelineDynamicStateCreateInfo::builder().dynamic_states(&dynamic_states);
+
+        let pipeline_layout_info = vk::PipelineLayoutCreateInfo::default();
+        let pipeline_layout = unsafe {
+            device
+                .create_pipeline_layout(&pipeline_layout_info, None)
+                .expect(BAD_ERROR)
+        };
+
+        (vec![vertex_shader_module, fragment_shader_module], pipeline_layout)
     }
 
     // Reads shader code from shader files (should be changed to take a shader file path as an argument in production code... I think)
@@ -516,6 +582,7 @@ impl Drop for VulkanBase {
     fn drop(&mut self) {
         println!("Cleaning up VulkanBase!");
         unsafe {
+            self.device.destroy_pipeline_layout(self.pipeline_layout, None);
             for shader_module in self.shader_modules.iter() {
                 self.device.destroy_shader_module(*shader_module, None);
             }
