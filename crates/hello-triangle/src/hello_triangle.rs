@@ -34,7 +34,7 @@ impl TriangleApplication {
         let window_dimensions = WindowDimensions::new(width, height);
 
         // Creates a VulkanType holding all the vulkan data
-        let _vulkan_type = VulkanBase::new(&_window, window_dimensions);
+        let _vulkan_type = VulkanBase::new(&_window, &window_dimensions);
 
         let app = TriangleApplication {
             _window,

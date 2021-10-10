@@ -7,6 +7,7 @@ use std::{
     ffi::{CStr, CString},
     io::Cursor,
     vec::Vec,
+    slice,
 };
 use winit::window::Window;
 
@@ -56,12 +57,12 @@ struct SwapchainDetails {
 }
 
 impl VulkanBase {
-    pub fn new(window: &Window, window_dimensions: WindowDimensions) -> VulkanBase {
+    pub fn new(window: &Window, window_dimensions: &WindowDimensions) -> VulkanBase {
         // Creates Entry and Instance
-        let (_entry, instance) = VulkanBase::create_instance(&window);
+        let (_entry, instance) = VulkanBase::create_instance(window);
 
         // Creates vk::SurfaceKHR and Surface
-        let (surface_khr, surface) = VulkanBase::create_surface(&_entry, &instance, &window);
+        let (surface_khr, surface) = VulkanBase::create_surface(&_entry, &instance, window);
 
         // Stores necessary device extensions
         let device_extension_names_raw = [Swapchain::name().as_ptr()];
@@ -87,7 +88,7 @@ impl VulkanBase {
         let (swapchain_khr, swapchain, swapchain_details) = VulkanBase::create_swapchain(
             &instance,
             &device,
-            &window_dimensions,
+            window_dimensions,
             &surface_khr,
             &swapchain_support_details,
         );
@@ -331,16 +332,14 @@ impl VulkanBase {
         // Wraps reference to queue_info in a slice in order to preserve lifetime information
         // Bad alternative is to build() the queue_info
         let device_create_info = vk::DeviceCreateInfo::builder()
-            .queue_create_infos(std::slice::from_ref(&queue_info))
+            .queue_create_infos(slice::from_ref(&queue_info))
             .enabled_extension_names(extensions);
 
-        let device = unsafe {
+        unsafe {
             instance
                 .create_device(*physical_device, &device_create_info, None)
                 .expect(BAD_ERROR)
-        };
-
-        device
+        }
     }
 
     // Creates the swap chain after determining swap chain settings
@@ -394,14 +393,14 @@ impl VulkanBase {
         let swapchain_details = SwapchainDetails {
             format,
             _presentation_mode: presentation_mode,
-            extent: extent,
+            extent,
         };
 
         (swapchain_khr, swapchain, swapchain_details)
     }
 
     // Determines surface format
-    fn choose_swap_surface_format(formats: &Vec<vk::SurfaceFormatKHR>) -> vk::SurfaceFormatKHR {
+    fn choose_swap_surface_format(formats: &[vk::SurfaceFormatKHR]) -> vk::SurfaceFormatKHR {
         for format in formats {
             if format.format == vk::Format::B8G8R8A8_SRGB
                 && format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR
@@ -415,7 +414,7 @@ impl VulkanBase {
 
     // Chooses presentation mode - immediate is preferred for least latency (as opposed to VSync aka FIFO)
     fn choose_swap_surface_presentation_mode(
-        presentation_modes: &Vec<vk::PresentModeKHR>,
+        presentation_modes: &[vk::PresentModeKHR],
     ) -> vk::PresentModeKHR {
         for presentation_mode in presentation_modes {
             if *presentation_mode == vk::PresentModeKHR::IMMEDIATE {
@@ -444,7 +443,7 @@ impl VulkanBase {
     // Creates an image view for each image in the swapchain
     fn create_image_views(
         device: &Device,
-        images: &Vec<vk::Image>,
+        images: &[vk::Image],
         format: &vk::SurfaceFormatKHR,
     ) -> Vec<vk::ImageView> {
         images
@@ -477,27 +476,24 @@ impl VulkanBase {
     }
 
     fn create_render_pass(device: &Device, format: &vk::SurfaceFormatKHR) -> vk::RenderPass {
-        let color_attachments = [vk::AttachmentDescription::builder()
+        let color_attachments = vk::AttachmentDescription::builder()
             .format(format.format)
             .samples(vk::SampleCountFlags::TYPE_1)
             .load_op(vk::AttachmentLoadOp::CLEAR)
             .store_op(vk::AttachmentStoreOp::STORE)
-            .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
-            .build()];
+            .final_layout(vk::ImageLayout::PRESENT_SRC_KHR);
 
-        let color_attachment_references = [vk::AttachmentReference::builder()
+        let color_attachment_references = vk::AttachmentReference::builder()
             .attachment(0)
-            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            .build()];
+            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL);
 
-        let subpasses = [vk::SubpassDescription::builder()
+        let subpasses = vk::SubpassDescription::builder()
             .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
-            .color_attachments(&color_attachment_references)
-            .build()];
+            .color_attachments(slice::from_ref(&color_attachment_references));
 
         let render_pass_info = vk::RenderPassCreateInfo::builder()
-            .attachments(&color_attachments)
-            .subpasses(&subpasses);
+            .attachments(slice::from_ref(&color_attachments))
+            .subpasses(slice::from_ref(&subpasses));
 
         unsafe {
             device
@@ -542,23 +538,21 @@ impl VulkanBase {
 
         // In reality viewport and scissors should be set during render pass dynamically, rather than before,
         // in order to prevent having to recreate the pipeline everytime the window is resized
-        let viewports = [vk::Viewport::builder()
+        let viewports = vk::Viewport::builder()
             .x(0.0)
             .y(0.0)
             .width(extent.width as f32)
             .height(extent.height as f32)
             .min_depth(0.0)
-            .max_depth(1.0)
-            .build()];
+            .max_depth(1.0);
 
-        let scissors = [vk::Rect2D::builder()
+        let scissors = vk::Rect2D::builder()
             .offset(*vk::Offset2D::builder().x(0).y(0))
-            .extent(*extent)
-            .build()];
+            .extent(*extent);
 
         let viewport_info = vk::PipelineViewportStateCreateInfo::builder()
-            .viewports(&viewports)
-            .scissors(&scissors);
+            .viewports(slice::from_ref(&viewports))
+            .scissors(slice::from_ref(&scissors));
 
         let rasterization_info = vk::PipelineRasterizationStateCreateInfo::builder()
             .polygon_mode(vk::PolygonMode::FILL)
@@ -568,7 +562,7 @@ impl VulkanBase {
         let multisample_info = vk::PipelineMultisampleStateCreateInfo::builder()
             .rasterization_samples(vk::SampleCountFlags::TYPE_1);
 
-        let alpha_blending_attachments = [vk::PipelineColorBlendAttachmentState::builder()
+        let alpha_blending_attachments = vk::PipelineColorBlendAttachmentState::builder()
             .blend_enable(false)
             .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
             .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
@@ -576,12 +570,11 @@ impl VulkanBase {
             .src_alpha_blend_factor(vk::BlendFactor::ONE)
             .dst_color_blend_factor(vk::BlendFactor::ZERO)
             .alpha_blend_op(vk::BlendOp::ADD)
-            .color_write_mask(vk::ColorComponentFlags::all())
-            .build()];
+            .color_write_mask(vk::ColorComponentFlags::all());
 
         let color_blend_info = vk::PipelineColorBlendStateCreateInfo::builder()
             .logic_op(vk::LogicOp::CLEAR)
-            .attachments(&alpha_blending_attachments);
+            .attachments(slice::from_ref(&alpha_blending_attachments));
 
         let dynamic_states = [vk::DynamicState::VIEWPORT, vk::DynamicState::SCISSOR];
         let dynamic_info =
@@ -594,7 +587,7 @@ impl VulkanBase {
                 .expect(BAD_ERROR)
         };
 
-        let graphics_pipeline_info = [vk::GraphicsPipelineCreateInfo::builder()
+        let graphics_pipeline_info = vk::GraphicsPipelineCreateInfo::builder()
             .stages(&shader_stage_infos)
             .vertex_input_state(&vertex_input_info)
             .input_assembly_state(&input_assembly_info)
@@ -604,12 +597,11 @@ impl VulkanBase {
             .color_blend_state(&color_blend_info)
             .dynamic_state(&dynamic_info)
             .layout(pipeline_layout)
-            .render_pass(*render_pass)
-            .build()];
+            .render_pass(*render_pass);
 
         let graphics_pipelines = unsafe {
             device
-                .create_graphics_pipelines(vk::PipelineCache::null(), &graphics_pipeline_info, None)
+                .create_graphics_pipelines(vk::PipelineCache::null(), slice::from_ref(&graphics_pipeline_info), None)
                 .expect(BAD_ERROR)
         };
 
@@ -636,7 +628,7 @@ impl VulkanBase {
     }
 
     // Creates a shader module from shader code stored in a u32 vector
-    fn create_shader_module(device: &Device, code: &Vec<u32>) -> vk::ShaderModule {
+    fn create_shader_module(device: &Device, code: &[u32]) -> vk::ShaderModule {
         let shader_module_create_info = vk::ShaderModuleCreateInfo::builder().code(code);
 
         unsafe {
