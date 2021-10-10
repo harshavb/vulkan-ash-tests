@@ -18,8 +18,8 @@ impl TriangleApplication {
         let event_loop = EventLoop::new();
 
         // Stores window dimensions
-        let width = 400;
-        let height = 400;
+        let width = 800;
+        let height = 600;
 
         // Creates a window using a WindowBuilder
         let mut builder = WindowBuilder::new();
