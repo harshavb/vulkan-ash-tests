@@ -181,6 +181,7 @@ impl VulkanBase {
     }
 
     // Picks the first valid physical device
+    // TODO: pick best one instead of first one
     fn pick_physical_device(
         instance: &Instance,
         extensions: &[*const i8],
